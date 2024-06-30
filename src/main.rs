@@ -17,35 +17,36 @@ struct RunConfig {
 }
 
 impl RunConfig {
-    fn new(nx: usize, total_distance: f64, timesteps: i32, dt: f64) -> Self {
+    fn new(nx: usize, total_distance: f64, timesteps: i32, sigma: f64) -> Self {
+        let dx = total_distance / (nx as f64 - 1.0);
         Self {
-            nx: nx,
-            dx: total_distance / (nx as f64 - 1.0),
-            timesteps: timesteps,
-            dt: dt,
+            nx,
+            dx,
+            timesteps,
+            dt: sigma * dx.powi(2) / 0.3,
         }
     }
 }
 
 fn main() {
-    let conf = RunConfig::new(101, GRID_WIDTH, 600, 0.001);
+    let conf = RunConfig::new(41, GRID_WIDTH, 20, 0.2);
 
     println!("{:?}", conf);
     // Initial condition grid
     let mut u = vec![1.0; conf.nx];
     u[(0.5 / conf.dx) as usize..(1.0 / conf.dx) as usize].fill(2.0);
 
-    nonlinear_convection(&conf, &mut u);
+    diffusion(&conf, 0.3, &mut u);
 
     plot(&u);
 }
 
 // 1D Diffusion. We use central difference for the second derivative and forward difference for time.
-fn diffusion(conf: &RunConfig, n: &mut Vec<f64>) {
+fn diffusion(conf: &RunConfig, v: f64, n: &mut Vec<f64>) {
     for _ in 0..conf.timesteps {
         let un = n.clone();
-        for i in 1..conf.nx {
-            n[i] = todo!();
+        for i in 1..conf.nx - 1 {
+            n[i] = un[i] + v * conf.dt / conf.dx.powi(2) * (un[i + 1] - 2.0 * un[i] + un[i - 1]);
         }
     }
 }
@@ -74,6 +75,8 @@ fn plot(data: &Vec<f64>) {
     let area = BitMapBackend::new("output/image.png", (1024, 768)).into_drawing_area();
 
     area.fill(&WHITE).unwrap();
+
+    println!("{:?}", data);
 
     let mut chart = ChartBuilder::on(&area)
         .build_cartesian_2d(0.0_f64..2.0, 0.8_f64..2.2)
