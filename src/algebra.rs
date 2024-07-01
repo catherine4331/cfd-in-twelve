@@ -1,8 +1,15 @@
-use std::ops::{Add, Div, Mul, Sub};
+use std::{
+    fmt::Display,
+    ops::{Add, BitXor, Div, Mul, Sub},
+};
 
+const ZERO: Expression = Expression::Const(0);
+const ONE: Expression = Expression::Const(1);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expression {
     Const(i64),
-    Symbol(String),
+    Variable(String),
     Add(Box<Expression>, Box<Expression>),
     Sub(Box<Expression>, Box<Expression>),
     Mul(Box<Expression>, Box<Expression>),
@@ -13,8 +20,53 @@ pub enum Expression {
 }
 
 impl Expression {
-    pub fn Pow(self, index: Self) -> Self {
+    pub fn pow(self, index: Self) -> Self {
         Expression::Pow(Box::new(self), Box::new(index))
+    }
+
+    pub fn diff(self, respect_to: &String) -> Self {
+        match self {
+            Expression::Const(_) => ZERO,
+            Expression::Variable(var) => {
+                if var == *respect_to {
+                    ONE
+                } else {
+                    ZERO
+                }
+            }
+            Expression::Add(lhs, rhs) => lhs.diff(respect_to) + rhs.diff(respect_to),
+            Expression::Sub(lhs, rhs) => lhs.diff(respect_to) - rhs.diff(respect_to),
+            Expression::Mul(f, g) => {
+                f.clone().diff(respect_to) * *g.clone() + *f * g.diff(respect_to)
+            }
+            Expression::Div(f, g) => {
+                (*g.clone() * f.clone().diff(respect_to) - *f * g.clone().diff(respect_to))
+                    / (*g ^ Expression::Const(2))
+            }
+            Expression::Pow(expr, index) => {
+                expr.clone().diff(respect_to)
+                    * *index.clone()
+                    * Expression::Pow(expr, Box::new(*index - ONE))
+            }
+            Expression::Neg(expr) => Expression::Neg(Box::new(expr.diff(respect_to))),
+            Expression::Exp(ref expr) => expr.clone().diff(respect_to) * self,
+        }
+    }
+}
+
+impl Display for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expression::Const(value) => write!(f, "{value}"),
+            Expression::Variable(var) => write!(f, "{var}"),
+            Expression::Add(lhs, rhs) => write!(f, "({} + {})", lhs, rhs),
+            Expression::Sub(lhs, rhs) => write!(f, "({} - {})", lhs, rhs),
+            Expression::Mul(lhs, rhs) => write!(f, "{}*{}", lhs, rhs),
+            Expression::Div(numerator, denominator) => write!(f, "{}/{}", numerator, denominator),
+            Expression::Pow(expr, index) => write!(f, "{}**{}", expr, index),
+            Expression::Neg(expr) => write!(f, "-{}", expr),
+            Expression::Exp(expr) => write!(f, "exp({})", expr),
+        }
     }
 }
 
@@ -22,6 +74,23 @@ impl Add for Expression {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
+        match self {
+            Expression::Const(lhs) => {
+                if lhs == 0 {
+                    return rhs;
+                } else if let Expression::Const(rhs) = rhs {
+                    return Expression::Const(rhs + lhs);
+                }
+            }
+            _ => {
+                if let Expression::Const(rhs) = rhs {
+                    if rhs == 0 {
+                        return self;
+                    }
+                }
+            }
+        }
+
         Expression::Add(Box::new(self), Box::new(rhs))
     }
 }
@@ -47,5 +116,59 @@ impl Div for Expression {
 
     fn div(self, rhs: Self) -> Self::Output {
         Expression::Div(Box::new(self), Box::new(rhs))
+    }
+}
+
+impl BitXor for Expression {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Expression::Pow(Box::new(self), Box::new(rhs))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Expression, ZERO};
+
+    #[test]
+    pub fn add_zero_lhs() {
+        let expr = ZERO + Expression::Const(10);
+
+        assert_eq!(expr, Expression::Const(10))
+    }
+
+    #[test]
+    pub fn add_zero_rhs() {
+        let expr = Expression::Const(10) + ZERO;
+
+        assert_eq!(expr, Expression::Const(10));
+    }
+
+    #[test]
+    pub fn add_two_consts() {
+        let expr = Expression::Const(15) + Expression::Const(5);
+
+        assert_eq!(expr, Expression::Const(20));
+    }
+
+    #[test]
+    pub fn basic_power() {
+        let expr = Expression::Variable("x".to_string()) ^ Expression::Const(3);
+
+        let diff_expr = expr.diff(&"x".to_string());
+
+        println!("{}", diff_expr);
+    }
+
+    #[test]
+    pub fn composite_exp() {
+        let expr = Expression::Exp(Box::new(
+            Expression::Variable("x".to_string()) + Expression::Const(3),
+        ));
+
+        let diff_expr = expr.diff(&"x".to_string());
+
+        println!("{}", diff_expr);
     }
 }

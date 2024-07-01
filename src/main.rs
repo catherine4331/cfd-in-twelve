@@ -1,6 +1,7 @@
+#![allow(dead_code)]
+
 mod algebra;
 
-use crate::algebra::Expression;
 use plotters::{
     backend::BitMapBackend,
     chart::ChartBuilder,
@@ -34,9 +35,9 @@ impl RunConfig {
 fn main() {
     let conf = RunConfig::new(41, GRID_WIDTH, 20, 0.2);
 
-    let a = Expression::Symbol("a".to_string());
-    let b = Expression::Symbol("b".to_string());
-    let c = a + b;
+    // let a = Expression::Symbol("a".to_string());
+    // let b = Expression::Symbol("b".to_string());
+    // let c = a + b;
 
     println!("{:?}", conf);
     // Initial condition grid
@@ -49,19 +50,20 @@ fn main() {
 }
 
 // 1D Diffusion. We use central difference for the second derivative and forward difference for time.
-fn diffusion(conf: &RunConfig, v: f64, n: &mut Vec<f64>) {
+fn diffusion(conf: &RunConfig, v: f64, n: &mut [f64]) {
     for _ in 0..conf.timesteps {
-        let un = n.clone();
+        let un = n.to_owned();
         for i in 1..conf.nx - 1 {
             n[i] = un[i] + v * conf.dt / conf.dx.powi(2) * (un[i + 1] - 2.0 * un[i] + un[i - 1]);
         }
     }
 }
 
+#[allow(dead_code)]
 // 1D nonlinear convection. The wavespeed is now u rather than being fixed. The same finite difference methods are used as for linear convection
-fn nonlinear_convection(conf: &RunConfig, n: &mut Vec<f64>) {
+fn nonlinear_convection(conf: &RunConfig, n: &mut [f64]) {
     for _ in 0..conf.timesteps {
-        let un = n.clone();
+        let un: Vec<f64> = n.to_owned();
         for i in 1..conf.nx {
             n[i] = un[i] - un[i] * conf.dt / conf.dx * (un[i] - un[i - 1]);
         }
@@ -69,9 +71,9 @@ fn nonlinear_convection(conf: &RunConfig, n: &mut Vec<f64>) {
 }
 
 // 1D linear convection. We are using forward difference for the time derivative and backward difference for the space derivative
-fn linear_convection(conf: &RunConfig, c: f64, n: &mut Vec<f64>) {
+fn linear_convection(conf: &RunConfig, c: f64, n: &mut [f64]) {
     for _ in 0..conf.timesteps {
-        let un = n.clone();
+        let un = n.to_owned();
         for i in 1..conf.nx {
             n[i] = un[i] - c * conf.dt / conf.dx * (un[i] - un[i - 1])
         }
