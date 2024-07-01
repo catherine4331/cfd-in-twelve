@@ -1,3 +1,6 @@
+mod algebra;
+
+use crate::algebra::Expression;
 use plotters::{
     backend::BitMapBackend,
     chart::ChartBuilder,
@@ -30,6 +33,10 @@ impl RunConfig {
 
 fn main() {
     let conf = RunConfig::new(41, GRID_WIDTH, 20, 0.2);
+
+    let a = Expression::Symbol("a".to_string());
+    let b = Expression::Symbol("b".to_string());
+    let c = a + b;
 
     println!("{:?}", conf);
     // Initial condition grid
