@@ -1,6 +1,6 @@
 use std::{
     fmt::Display,
-    ops::{Add, BitXor, Div, Mul, Sub},
+    ops::{Add, Div, Mul, Sub},
 };
 
 const ZERO: Expression = Expression::Const(0);
@@ -41,7 +41,7 @@ impl Expression {
             }
             Expression::Div(f, g) => {
                 (*g.clone() * f.clone().diff(respect_to) - *f * g.clone().diff(respect_to))
-                    / (*g ^ Expression::Const(2))
+                    / (g.pow(Expression::Const(2)))
             }
             Expression::Pow(expr, index) => {
                 expr.clone().diff(respect_to)
@@ -63,7 +63,7 @@ impl Display for Expression {
             Expression::Sub(lhs, rhs) => write!(f, "({} - {})", lhs, rhs),
             Expression::Mul(lhs, rhs) => write!(f, "{}*{}", lhs, rhs),
             Expression::Div(numerator, denominator) => write!(f, "{}/{}", numerator, denominator),
-            Expression::Pow(expr, index) => write!(f, "{}**{}", expr, index),
+            Expression::Pow(expr, index) => write!(f, "({})**{}", expr, index),
             Expression::Neg(expr) => write!(f, "-{}", expr),
             Expression::Exp(expr) => write!(f, "exp({})", expr),
         }
@@ -79,7 +79,7 @@ impl Add for Expression {
                 if lhs == 0 {
                     return rhs;
                 } else if let Expression::Const(rhs) = rhs {
-                    return Expression::Const(rhs + lhs);
+                    return Expression::Const(lhs + rhs);
                 }
             }
             _ => {
@@ -99,6 +99,23 @@ impl Sub for Expression {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
+        match self {
+            Expression::Const(lhs) => {
+                if lhs == 0 {
+                    return rhs;
+                } else if let Expression::Const(rhs) = rhs {
+                    return Expression::Const(lhs - rhs);
+                }
+            }
+            _ => {
+                if let Expression::Const(rhs) = rhs {
+                    if rhs == 0 {
+                        return self;
+                    }
+                }
+            }
+        }
+
         Expression::Sub(Box::new(self), Box::new(rhs))
     }
 }
@@ -107,7 +124,28 @@ impl Mul for Expression {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        Expression::Mul(Box::new(self), Box::new(rhs))
+        match self {
+            Expression::Const(lhs) => {
+                if lhs == 0 {
+                    return Expression::Const(0);
+                } else if lhs == 1 {
+                    return rhs;
+                } else if let Expression::Const(rhs) = rhs {
+                    return Expression::Const(lhs * rhs);
+                }
+            }
+            _ => {
+                if let Expression::Const(rhs) = rhs {
+                    if rhs == 0 {
+                        return Expression::Const(0);
+                    } else if rhs == 1 {
+                        return self;
+                    }
+                }
+            }
+        }
+
+        Expression::Sub(Box::new(self), Box::new(rhs))
     }
 }
 
@@ -119,30 +157,22 @@ impl Div for Expression {
     }
 }
 
-impl BitXor for Expression {
-    type Output = Self;
-
-    fn bitxor(self, rhs: Self) -> Self::Output {
-        Expression::Pow(Box::new(self), Box::new(rhs))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{Expression, ZERO};
 
     #[test]
     pub fn add_zero_lhs() {
-        let expr = ZERO + Expression::Const(10);
+        let expr = ZERO + Expression::Variable("x".to_string());
 
-        assert_eq!(expr, Expression::Const(10))
+        assert_eq!(expr, Expression::Variable("x".to_string()));
     }
 
     #[test]
     pub fn add_zero_rhs() {
-        let expr = Expression::Const(10) + ZERO;
+        let expr = Expression::Variable("x".to_string()) + ZERO;
 
-        assert_eq!(expr, Expression::Const(10));
+        assert_eq!(expr, Expression::Variable("x".to_string()));
     }
 
     #[test]
@@ -153,12 +183,36 @@ mod tests {
     }
 
     #[test]
+    pub fn sub_zero_lhs() {
+        let expr = ZERO - Expression::Variable("x".to_string());
+
+        assert_eq!(expr, Expression::Variable("x".to_string()));
+    }
+
+    #[test]
+    pub fn sub_zero_rhs() {
+        let expr = Expression::Variable("x".to_string()) - ZERO;
+
+        assert_eq!(expr, Expression::Variable("x".to_string()));
+    }
+
+    #[test]
+    pub fn sub_two_consts() {
+        let expr = Expression::Const(15) - Expression::Const(5);
+
+        assert_eq!(expr, Expression::Const(10));
+    }
+
+    #[test]
     pub fn basic_power() {
-        let expr = Expression::Variable("x".to_string()) ^ Expression::Const(3);
+        let expr = Expression::Variable("x".to_string()).pow(Expression::Const(3));
 
         let diff_expr = expr.diff(&"x".to_string());
 
-        println!("{}", diff_expr);
+        assert_eq!(
+            diff_expr,
+            Expression::Const(3) * Expression::Variable("x".to_string()).pow(Expression::Const(2))
+        );
     }
 
     #[test]
@@ -169,6 +223,11 @@ mod tests {
 
         let diff_expr = expr.diff(&"x".to_string());
 
-        println!("{}", diff_expr);
+        assert_eq!(
+            diff_expr,
+            Expression::Exp(Box::new(
+                Expression::Variable("x".to_string()) + Expression::Const(3)
+            ))
+        );
     }
 }
